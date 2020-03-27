@@ -13,6 +13,7 @@ CALL = 0b01010000
 RET = 0b00010001
 ADD = 0b10100000
 CMP = 0b10100111
+JMP = 0b01010100
 
 SP = 7
 
@@ -38,12 +39,16 @@ class CPU:
         self.add_branch(PUSH, self.push)
         self.add_branch(CALL, self.call)
         self.add_branch(RET, self.ret)
-        self.add_branch(CMP, self.cmp)
+        self.add_branch(CMP, self.cmpa)
+        self.add_branch(JMP, self.jmp)
 
     def add_branch(self, opcode, handler):
         self.branchtable[opcode] = handler
 
-    def cmp(self):
+    def jmp(self):
+        self.pc = self.reg[self.ram_read(self.pc + 1)]
+
+    def cmpa(self):
         self.alu("CMP", self.ram_read(self.pc + 1), self.ram_read(self.pc + 2))
 
     def call(self):
