@@ -27,6 +27,74 @@ MOD = 0b10100100
 SP = 7
 
 
+class ALU:
+    """ALU class."""
+
+    def __init__(self, parent_cpu):
+        self.cpu = parent_cpu
+        self.branchtable = {}
+        self.add_branch(AND, self.and_op)
+        self.add_branch(XOR, self.xor)
+        self.add_branch(OR, self.or_op)
+        self.add_branch(NOT, self.not_op)
+        self.add_branch(SHL, self.shl)
+        self.add_branch(SHR, self.shr)
+        self.add_branch(MOD, self.mod)
+        self.add_branch(MULT, self.mult)
+        self.add_branch(ADD, self.add)
+        self.add_branch(CMP, self.cmp_op)
+
+    def add_branch(self, opcode, handler):
+        self.branchtable[opcode] = handler
+
+    def mod(self, reg_a, reg_b):
+        num = self.cpu.reg[reg_b]
+        if num == 0:
+            raise Exception("Unsupported ALU operation - division by zero")
+        else:
+            self.cpu.reg[reg_a] = self.cpu.reg[reg_a] % num
+
+    def shl(self, reg_a, reg_b):
+        self.cpu.reg[reg_a] = self.cpu.reg[reg_a] << self.cpu.reg[reg_b]
+
+    def shr(self, reg_a, reg_b):
+        self.cpu.reg[reg_a] = self.cpu.reg[reg_a] >> self.cpu.reg[reg_b]
+
+    def not_op(self, reg_a, reg_b):
+        self.cpu.reg[reg_a] = ~self.cpu.reg[reg_a] & ((1 << 8) - 1)
+
+    def or_op(self, reg_a, reg_b):
+        self.cpu.reg[reg_a] = self.cpu.reg[reg_a] | self.cpu.reg[reg_b]
+
+    def xor(self, reg_a, reg_b):
+        self.cpu.reg[reg_a] = self.cpu.reg[reg_a] ^ self.cpu.reg[reg_b]
+
+    def and_op(self, reg_a, reg_b):
+        self.cpu.reg[reg_a] = self.cpu.reg[reg_a] & self.cpu.reg[reg_b]
+
+    def add(self, reg_a, reg_b):
+        self.cpu.reg[reg_a] += self.cpu.reg[reg_b]
+
+    def mult(self, reg_a, reg_b):
+        self.cpu.reg[reg_a] *= self.cpu.reg[reg_b]
+
+    def cmp_op(self, reg_a, reg_b):
+        num1 = self.cpu.reg[reg_a]
+        num2 = self.cpu.reg[reg_b]
+        if num1 == num2:
+            self.cpu.fl = 0b00000001
+        elif num1 < num2:
+            self.cpu.fl = 0b00000100
+        elif num1 > num2:
+            self.cpu.fl = 0b00000010
+
+    def run(self, opcode, reg_a, reg_b):
+        if opcode in self.branchtable:
+            return self.branchtable[opcode](reg_a, reg_b)
+        else:
+            raise Exception("Unsupported ALU operation")
+
+
 class CPU:
     """Main CPU class."""
 
@@ -42,47 +110,18 @@ class CPU:
         self.add_branch(LDI, self.ldi)
         self.add_branch(PRN, self.prn)
         self.add_branch(NOP, self.nop)
-        self.add_branch(MULT, self.mult)
-        self.add_branch(ADD, self.add)
         self.add_branch(POP, self.pop)
         self.add_branch(PUSH, self.push)
         self.add_branch(CALL, self.call)
         self.add_branch(RET, self.ret)
-        self.add_branch(CMP, self.cmp_op)
         self.add_branch(JMP, self.jmp)
         self.add_branch(JEQ, self.jeq)
         self.add_branch(JNE, self.jne)
-        self.add_branch(AND, self.and_op)
-        self.add_branch(XOR, self.xor)
-        self.add_branch(OR, self.or_op)
-        self.add_branch(NOT, self.not_op)
-        self.add_branch(SHL, self.shl)
-        self.add_branch(SHR, self.shr)
-        self.add_branch(MOD, self.mod)
+        self.alu_ops = {AND, XOR, OR, NOT, SHL, SHR, MOD, MULT, ADD, CMP}
+        self.alu = ALU(self)
 
     def add_branch(self, opcode, handler):
         self.branchtable[opcode] = handler
-
-    def mod(self):
-        self.alu("MOD", self.ram_read(self.pc + 1), self.ram_read(self.pc + 2))
-
-    def shl(self):
-        self.alu("SHL", self.ram_read(self.pc + 1), self.ram_read(self.pc + 2))
-
-    def shr(self):
-        self.alu("SHR", self.ram_read(self.pc + 1), self.ram_read(self.pc + 2))
-
-    def not_op(self):
-        self.alu("NOT", self.ram_read(self.pc + 1), self.ram_read(self.pc + 2))
-
-    def or_op(self):
-        self.alu("OR", self.ram_read(self.pc + 1), self.ram_read(self.pc + 2))
-
-    def xor(self):
-        self.alu("XOR", self.ram_read(self.pc + 1), self.ram_read(self.pc + 2))
-
-    def and_op(self):
-        self.alu("AND", self.ram_read(self.pc + 1), self.ram_read(self.pc + 2))
 
     def jeq(self):
         if self.fl == 1:
@@ -98,9 +137,6 @@ class CPU:
 
     def jmp(self):
         self.pc = self.reg[self.ram_read(self.pc + 1)]
-
-    def cmp_op(self):
-        self.alu("CMP", self.ram_read(self.pc + 1), self.ram_read(self.pc + 2))
 
     def call(self):
         self.reg[SP] -= 1
@@ -139,12 +175,9 @@ class CPU:
     def nop(self):
         pass
 
-    def add(self):
-        self.alu("ADD", self.ram_read(self.pc + 1), self.ram_read(self.pc + 2))
-
-    def mult(self):
-        self.alu("MULT", self.ram_read(self.pc + 1),
-                 self.ram_read(self.pc + 2))
+    def run_alu(self, opcode):
+        return self.alu.run(opcode, self.ram_read(self.pc + 1),
+                            self.ram_read(self.pc + 2))
 
     def load(self, file):
         """Load a program into memory."""
@@ -167,43 +200,6 @@ class CPU:
 
     def ram_write(self, index, num):
         self.ram[index] = num
-
-    def alu(self, op, reg_a, reg_b):
-        """ALU operations."""
-
-        if op == "ADD":
-            self.reg[reg_a] += self.reg[reg_b]
-        elif op == "MULT":
-            self.reg[reg_a] *= self.reg[reg_b]
-        elif op == "CMP":
-            num1 = self.reg[reg_a]
-            num2 = self.reg[reg_b]
-            if num1 == num2:
-                self.fl = 0b00000001
-            elif num1 < num2:
-                self.fl = 0b00000100
-            elif num1 > num2:
-                self.fl = 0b00000010
-        elif op == "AND":
-            self.reg[reg_a] = self.reg[reg_a] & self.reg[reg_b]
-        elif op == "XOR":
-            self.reg[reg_a] = self.reg[reg_a] ^ self.reg[reg_b]
-        elif op == "OR":
-            self.reg[reg_a] = self.reg[reg_a] | self.reg[reg_b]
-        elif op == "NOT":
-            self.reg[reg_a] = ~self.reg[reg_a] & ((1 << 8) - 1)
-        elif op == "SHL":
-            self.reg[reg_a] = self.reg[reg_a] << self.reg[reg_b]
-        elif op == "SHR":
-            self.reg[reg_a] = self.reg[reg_a] >> self.reg[reg_b]
-        elif op == "MOD":
-            num = self.reg[reg_b]
-            if num == 0:
-                raise Exception("Unsupported ALU operation - division by zero")
-            else:
-                self.reg[reg_a] = self.reg[reg_a] % num
-        else:
-            raise Exception("Unsupported ALU operation")
 
     def trace(self):
         """
@@ -237,10 +233,12 @@ class CPU:
         self.pc = 0
         while not stop:
             command = self.ram_read(self.pc)
-            if command in self.branchtable:
+            if command in self.alu_ops:
+                stop = self.run_alu(command)
+            elif command in self.branchtable:
                 stop = self.branchtable[command]()
-                if not self.sets_pc(command):
-                    self.pc += self.increment(command)
             else:
                 print(f"Unknown instruction: {command}")
                 sys.exit(1)
+            if not self.sets_pc(command):
+                self.pc += self.increment(command)
