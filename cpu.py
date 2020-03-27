@@ -52,10 +52,14 @@ class CPU:
     def jeq(self):
         if self.fl == 1:
             self.jmp()
+        else:
+            self.pc += self.increment(JMP)
 
     def jne(self):
-        if self.fl == 0:
+        if self.fl != 1:
             self.jmp()
+        else:
+            self.pc += self.increment(JNE)
 
     def jmp(self):
         self.pc = self.reg[self.ram_read(self.pc + 1)]
