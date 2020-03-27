@@ -14,6 +14,8 @@ RET = 0b00010001
 ADD = 0b10100000
 CMP = 0b10100111
 JMP = 0b01010100
+JEQ = 0b01010101
+JNE = 0b01010110
 
 SP = 7
 
@@ -41,9 +43,19 @@ class CPU:
         self.add_branch(RET, self.ret)
         self.add_branch(CMP, self.cmpa)
         self.add_branch(JMP, self.jmp)
+        self.add_branch(JEQ, self.jeq)
+        self.add_branch(JNE, self.jne)
 
     def add_branch(self, opcode, handler):
         self.branchtable[opcode] = handler
+
+    def jeq(self):
+        if self.fl == 1:
+            self.jmp()
+
+    def jne(self):
+        if self.fl == 0:
+            self.jmp()
 
     def jmp(self):
         self.pc = self.reg[self.ram_read(self.pc + 1)]
