@@ -16,6 +16,13 @@ CMP = 0b10100111
 JMP = 0b01010100
 JEQ = 0b01010101
 JNE = 0b01010110
+AND = 0b10101000
+XOR = 0b10101011
+OR = 0b10101010
+NOT = 0b01101001
+SHL = 0b10101100
+SHR = 0b10101101
+MOD = 0b10100100
 
 SP = 7
 
@@ -41,13 +48,41 @@ class CPU:
         self.add_branch(PUSH, self.push)
         self.add_branch(CALL, self.call)
         self.add_branch(RET, self.ret)
-        self.add_branch(CMP, self.cmpa)
+        self.add_branch(CMP, self.cmp_op)
         self.add_branch(JMP, self.jmp)
         self.add_branch(JEQ, self.jeq)
         self.add_branch(JNE, self.jne)
+        self.add_branch(AND, self.and_op)
+        self.add_branch(XOR, self.xor)
+        self.add_branch(OR, self.or_op)
+        self.add_branch(NOT, self.not_op)
+        self.add_branch(SHL, self.shl)
+        self.add_branch(SHR, self.shr)
+        self.add_branch(MOD, self.mod)
 
     def add_branch(self, opcode, handler):
         self.branchtable[opcode] = handler
+
+    def mod(self):
+        self.alu("MOD", self.ram_read(self.pc + 1), self.ram_read(self.pc + 2))
+
+    def shl(self):
+        self.alu("SHL", self.ram_read(self.pc + 1), self.ram_read(self.pc + 2))
+
+    def shr(self):
+        self.alu("SHR", self.ram_read(self.pc + 1), self.ram_read(self.pc + 2))
+
+    def not_op(self):
+        self.alu("NOT", self.ram_read(self.pc + 1), self.ram_read(self.pc + 2))
+
+    def or_op(self):
+        self.alu("OR", self.ram_read(self.pc + 1), self.ram_read(self.pc + 2))
+
+    def xor(self):
+        self.alu("XOR", self.ram_read(self.pc + 1), self.ram_read(self.pc + 2))
+
+    def and_op(self):
+        self.alu("AND", self.ram_read(self.pc + 1), self.ram_read(self.pc + 2))
 
     def jeq(self):
         if self.fl == 1:
@@ -64,7 +99,7 @@ class CPU:
     def jmp(self):
         self.pc = self.reg[self.ram_read(self.pc + 1)]
 
-    def cmpa(self):
+    def cmp_op(self):
         self.alu("CMP", self.ram_read(self.pc + 1), self.ram_read(self.pc + 2))
 
     def call(self):
@@ -149,6 +184,24 @@ class CPU:
                 self.fl = 0b00000100
             elif num1 > num2:
                 self.fl = 0b00000010
+        elif op == "AND":
+            self.reg[reg_a] = self.reg[reg_a] & self.reg[reg_b]
+        elif op == "XOR":
+            self.reg[reg_a] = self.reg[reg_a] ^ self.reg[reg_b]
+        elif op == "OR":
+            self.reg[reg_a] = self.reg[reg_a] | self.reg[reg_b]
+        elif op == "NOT":
+            self.reg[reg_a] = ~self.reg[reg_a] & ((1 << 8) - 1)
+        elif op == "SHL":
+            self.reg[reg_a] = self.reg[reg_a] << self.reg[reg_b]
+        elif op == "SHR":
+            self.reg[reg_a] = self.reg[reg_a] >> self.reg[reg_b]
+        elif op == "MOD":
+            num = self.reg[reg_b]
+            if num == 0:
+                raise Exception("Unsupported ALU operation - division by zero")
+            else:
+                self.reg[reg_a] = self.reg[reg_a] % num
         else:
             raise Exception("Unsupported ALU operation")
 
